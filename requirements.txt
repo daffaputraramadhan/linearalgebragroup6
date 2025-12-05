@@ -1,10 +1,8 @@
 streamlit
 pandas
 numpy
-scipy
 matplotlib
-seaborn
-nltk
-reportlab
 fpdf
-plotly
+tempfile
+io
+plotly.graph_objects
