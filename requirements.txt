@@ -8,3 +8,4 @@ nltk
 reportlab
 fpdf
 plotly
+tempfile
