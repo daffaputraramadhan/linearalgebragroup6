@@ -2,7 +2,3 @@ streamlit
 pandas
 numpy
 matplotlib
-fpdf
-tempfile
-io
-plotly.graph_objects
