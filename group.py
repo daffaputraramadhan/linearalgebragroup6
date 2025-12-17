@@ -474,7 +474,7 @@ t = translations[lang] # Load dictionary bahasa
 theme_mode = st.session_state["theme_mode"]
 
 with st.container(border=True):
-    header_col1, header_col2, header_col3 = st.columns([6, 1, 1], vertical_alignment="center")
+    header_col1, header_col2, header_col3 = st.columns([4, 1, 1], vertical_alignment="center")
 
     with header_col1:
         st.title(t["title"])
