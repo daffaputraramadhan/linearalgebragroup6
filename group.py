@@ -908,32 +908,32 @@ with tab_team:
         # Team members data
         team_members = [
             {
-                "name": "Ahmad Fauzi",
-                "sid": "1234567890",
-                "role": "Frontend Developer",
-                "photo": "assets/team/member1.jpg",
-                "contribution": "UI/UX Design, Frontend Development"
+                "name": "Daffa Putra Ramadhan",
+                "sid": "004202400032",
+                "role": "Leader",
+                "photo": "images/daffa.jpg",
+                "contribution": "UI/UX Design, Frontend Development, Data Processing, Project Coordination"
             },
             {
-                "name": "Siti Nurhaliza",
-                "sid": "0987654321",
-                "role": "Backend Developer",
-                "photo": "assets/team/member2.jpg",
+                "name": "Mochammad Naufal Ribi",
+                "sid": "0042024000431",
+                "role": "Member",
+                "photo": "images/opal.jpg",
                 "contribution": "Algorithm Implementation, Data Processing"
             },
             {
-                "name": "Budi Santoso",
-                "sid": "1122334455",
-                "role": "Data Scientist",
-                "photo": "assets/team/member3.jpg",
+                "name": "Muhammad Rakan Febriyanto",
+                "sid": "004202400067",
+                "role": "Member",
+                "photo": "images/rakan.jpg",
                 "contribution": "Image Processing Algorithms, Documentation"
             },
             {
-                "name": "Maya Indah",
-                "sid": "5566778899",
-                "role": "Project Manager",
-                "photo": "assets/team/member4.jpg",
-                "contribution": "Project Coordination, Testing"
+                "name": "Sahat Fernando",
+                "sid": "004202400121",
+                "role": "Member",
+                "photo": "images/nando.jpg
+                "contribution": "Testing"
             }
         ]
         
