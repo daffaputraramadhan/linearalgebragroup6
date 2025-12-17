@@ -442,6 +442,9 @@ button[kind="secondary"] {
     color: #000000 !important;
     border: 2px solid #4CAF50 !important;
 }
+.stContainer {
+    background-color: rgba(255,255,255,0.9) !important;
+}
 </style>
 """
 
