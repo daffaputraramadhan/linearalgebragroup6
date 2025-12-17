@@ -1,6 +1,10 @@
 streamlit
-numpy
 pandas
-plotly
-fpdf
-kaleido==0.2.1
+numpy
+scipy
+matplotlib
+seaborn
+nltk
+reportlab
+opencv-python-headless
+pillow
