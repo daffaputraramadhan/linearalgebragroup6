@@ -9,13 +9,12 @@ import base64
 
 # ===================== 1. CONFIG (HANYA BOLEH SEKALI DI AWAL) =====================
 st.set_page_config(
-    page_title="Explanation",
+    page_title="Matrix Transformation & Image Processing",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ===================== 2. TRANSLATIONS DATA (SANGAT PENTING) =====================
-# Ini adalah bagian yang sebelumnya hilang dan menyebabkan error.
+# ===================== 2. TRANSLATIONS DATA =====================
 translations = {
     "id": {
         "title": "Matrix Transformation & Image Processing",
@@ -107,7 +106,7 @@ translations = {
         "team_sid": "NIM:",
         "team_role": "Peran:",
         "team_group": "Kelompok:",
-        "team_Contribution": "Kontribusi:"
+        "team_contribution": "Kontribusi:"
     },
     "en": {
         "title": "Matrix Transformation & Image Processing",
@@ -199,7 +198,7 @@ translations = {
         "team_sid": "Student ID:",
         "team_role": "Role:",
         "team_group": "Group:",
-        "team_Contribution": "Contribution:"
+        "team_contribution": "Contribution:"
     }
 }
 
@@ -208,7 +207,17 @@ translations = {
 def set_video_background(video_path: str):
     """Set an mp4 video as full-screen background using HTML/CSS."""
     if not os.path.exists(video_path):
-        # Silent fail or use a color if video missing to prevent crash
+        # Create a simple colored background if video doesn't exist
+        st.markdown(
+            """
+            <style>
+            .stApp {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         return
 
     with open(video_path, "rb") as f:
@@ -271,11 +280,6 @@ def apply_affine_transform(img_rgb, M, output_size=None):
     )
     return to_streamlit(transformed)
 
-def manual_convolution_gray(img_gray, kernel):
-    # Optimasi sederhana menggunakan filter2D OpenCV untuk performa
-    # Jika ingin full manual loop (lambat di Python), bisa dikembalikan
-    return cv2.filter2D(img_gray, -1, kernel)
-
 def rgb_to_gray(img_rgb):
     img_bgr = to_opencv(img_rgb)
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
@@ -321,17 +325,23 @@ def safe_display_square_image(path):
             </div>
             """, unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Error loading image: {e}")
+            st.markdown(f"""
+            <div class="crystal-shape">
+                <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#ddd; color:#666; font-size:12px;">
+                    Error: {str(e)[:20]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div class="team-photo-container">
+        <div class="crystal-shape">
             <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#ddd; color:#666; font-size:12px;">
                 No Image
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-# --- Background Removal Helpers (Simplified for Stability) ---
+# --- Background Removal Helpers ---
 def segment_foreground(image: np.ndarray) -> np.ndarray:
     """Simple center ellipse mask for demo purposes"""
     h, w = image.shape[:2]
@@ -358,19 +368,6 @@ def simple_background_removal_hsv(img_rgb):
     
     return cv2.cvtColor(dst, cv2.COLOR_BGRA2RGBA)
 
-def remove_background_advanced(image, mode="auto", output_mode="transparent", **kwargs):
-    # Menggunakan dummy mask karena implementasi ML/AI berat untuk script ini
-    raw_mask = segment_foreground(image)
-    
-    # Smooth mask
-    raw_mask = cv2.GaussianBlur(raw_mask, (21, 21), 0)
-    
-    if output_mode == "transparent":
-        rgba = np.dstack([image, raw_mask])
-        return rgba
-    
-    return image
-
 # ===================== 4. SESSION STATE INIT =====================
 
 if "theme_mode" not in st.session_state:
@@ -380,9 +377,13 @@ if "language" not in st.session_state:
 if "original_img" not in st.session_state:
     st.session_state.original_img = None
 if "geo_transform" not in st.session_state:
-    st.session_state["geo_transform"] = None
+    st.session_state["geo_transform"] = "translation"  # Default value
 if "image_filter" not in st.session_state:
-    st.session_state["image_filter"] = None
+    st.session_state["image_filter"] = "blur"  # Default value
+if "last_result" not in st.session_state:
+    st.session_state.last_result = None
+if "filter_result" not in st.session_state:
+    st.session_state.filter_result = None
 
 # ===================== 5. UI SETUP & CSS =====================
 
@@ -394,6 +395,11 @@ base_css = """
 .block-container {
     max-width: 1200px;
     padding: 2rem 2rem 2rem 2rem;
+}
+.stMainBlockContainer {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    border-radius: 10px;
+    padding: 20px;
 }
 section[data-testid="stExpander"]{
     border-radius:10px;
@@ -428,6 +434,7 @@ div[data-testid="column"] button {
     text-align: center;
     border: 1px solid #ccc;
     background: #fff;
+    border-radius: 5px;
 }
 </style>
 """
@@ -451,7 +458,7 @@ button[kind="secondary"] {
 dark_css = """
 <style>
 .stMarkdown, .stMarkdown p, .stMarkdown li, h1, h2, h3 {
-    color: #00FF00 !important;
+    color: #ffffff !important;
 }
 button[kind="secondary"] {
     background-color: #1e3a1e !important;
@@ -604,131 +611,126 @@ with tab_geometry:
         
         if st.session_state.original_img is None:
             st.warning(t["geo_info"])
-            st.stop()
-        
-        original_img = st.session_state.original_img
-        
-        # Transformation selection buttons
-        col_btns = st.columns(5)
-        with col_btns[0]:
-            translation_btn = st.button(t["btn_translation"], use_container_width=True)
-        with col_btns[1]:
-            scaling_btn = st.button(t["btn_scaling"], use_container_width=True)
-        with col_btns[2]:
-            rotation_btn = st.button(t["btn_rotation"], use_container_width=True)
-        with col_btns[3]:
-            shearing_btn = st.button(t["btn_shearing"], use_container_width=True)
-        with col_btns[4]:
-            reflection_btn = st.button(t["btn_reflection"], use_container_width=True)
-        
-        # Set active transform based on button click
-        if translation_btn:
-            st.session_state["geo_transform"] = "translation"
-        elif scaling_btn:
-            st.session_state["geo_transform"] = "scaling"
-        elif rotation_btn:
-            st.session_state["geo_transform"] = "rotation"
-        elif shearing_btn:
-            st.session_state["geo_transform"] = "shearing"
-        elif reflection_btn:
-            st.session_state["geo_transform"] = "reflection"
-        
-        # If no transform selected yet, default to translation
-        if st.session_state["geo_transform"] is None:
-            st.session_state["geo_transform"] = "translation"
-        
-        current_transform = st.session_state["geo_transform"]
-        
-        # Display transformation controls
-        st.markdown(f"**Selected:** {current_transform.upper()}")
-        
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            # Transformation parameters
-            if current_transform == "translation":
-                st.markdown(t["trans_settings"])
-                dx = st.slider(t["trans_dx"], -200, 200, 0, 10)
-                dy = st.slider(t["trans_dy"], -200, 200, 0, 10)
-                
-                # Create translation matrix
-                M = np.float32([[1, 0, dx], [0, 1, dy]])
-                
-                if st.button(t["btn_apply"], key="apply_trans"):
-                    result_img = apply_affine_transform(original_img, M)
-                    st.session_state.last_result = result_img
+        else:
+            original_img = st.session_state.original_img
+            
+            # Transformation selection buttons
+            col_btns = st.columns(5)
+            with col_btns[0]:
+                translation_btn = st.button(t["btn_translation"], use_container_width=True)
+            with col_btns[1]:
+                scaling_btn = st.button(t["btn_scaling"], use_container_width=True)
+            with col_btns[2]:
+                rotation_btn = st.button(t["btn_rotation"], use_container_width=True)
+            with col_btns[3]:
+                shearing_btn = st.button(t["btn_shearing"], use_container_width=True)
+            with col_btns[4]:
+                reflection_btn = st.button(t["btn_reflection"], use_container_width=True)
+            
+            # Set active transform based on button click
+            if translation_btn:
+                st.session_state["geo_transform"] = "translation"
+            elif scaling_btn:
+                st.session_state["geo_transform"] = "scaling"
+            elif rotation_btn:
+                st.session_state["geo_transform"] = "rotation"
+            elif shearing_btn:
+                st.session_state["geo_transform"] = "shearing"
+            elif reflection_btn:
+                st.session_state["geo_transform"] = "reflection"
+            
+            current_transform = st.session_state["geo_transform"]
+            
+            # Display transformation controls
+            st.markdown(f"**Selected:** {current_transform.upper()}")
+            
+            col_left, col_right = st.columns(2)
+            
+            with col_left:
+                # Transformation parameters
+                if current_transform == "translation":
+                    st.markdown(t["trans_settings"])
+                    dx = st.slider(t["trans_dx"], -200, 200, 0, 10)
+                    dy = st.slider(t["trans_dy"], -200, 200, 0, 10)
                     
-            elif current_transform == "scaling":
-                st.markdown(t["scale_settings"])
-                scale_x = st.slider(t["scale_x"], 0.1, 3.0, 1.0, 0.1)
-                scale_y = st.slider(t["scale_y"], 0.1, 3.0, 1.0, 0.1)
-                
-                h, w = original_img.shape[:2]
-                new_w, new_h = int(w * scale_x), int(h * scale_y)
-                
-                M = np.float32([[scale_x, 0, 0], [0, scale_y, 0]])
-                
-                if st.button(t["btn_apply"], key="apply_scale"):
-                    result_img = apply_affine_transform(original_img, M, (new_w, new_h))
-                    st.session_state.last_result = result_img
+                    # Create translation matrix
+                    M = np.float32([[1, 0, dx], [0, 1, dy]])
                     
-            elif current_transform == "rotation":
-                st.markdown(t["rot_settings"])
-                angle = st.slider(t["rot_angle"], -180, 180, 0, 5)
-                
-                h, w = original_img.shape[:2]
-                center = (w // 2, h // 2)
-                M = cv2.getRotationMatrix2D(center, angle, 1.0)
-                
-                if st.button(t["btn_apply"], key="apply_rot"):
-                    result_img = apply_affine_transform(original_img, M)
-                    st.session_state.last_result = result_img
+                    if st.button(t["btn_apply"], key="apply_trans"):
+                        result_img = apply_affine_transform(original_img, M)
+                        st.session_state.last_result = result_img
+                        
+                elif current_transform == "scaling":
+                    st.markdown(t["scale_settings"])
+                    scale_x = st.slider(t["scale_x"], 0.1, 3.0, 1.0, 0.1)
+                    scale_y = st.slider(t["scale_y"], 0.1, 3.0, 1.0, 0.1)
                     
-            elif current_transform == "shearing":
-                st.markdown(t["shear_settings"])
-                shear_x = st.slider(t["shear_x"], -1.0, 1.0, 0.0, 0.1)
-                shear_y = st.slider(t["shear_y"], -1.0, 1.0, 0.0, 0.1)
-                
-                M = np.float32([[1, shear_x, 0], [shear_y, 1, 0]])
-                
-                if st.button(t["btn_apply"], key="apply_shear"):
-                    result_img = apply_affine_transform(original_img, M)
-                    st.session_state.last_result = result_img
+                    h, w = original_img.shape[:2]
+                    new_w, new_h = int(w * scale_x), int(h * scale_y)
                     
-            elif current_transform == "reflection":
-                st.markdown(t["refl_settings"])
-                axis = st.radio(t["refl_axis"], 
-                              [t["axis_x"], t["axis_y"], t["axis_diag"]],
-                              horizontal=True)
-                
-                if axis == t["axis_x"]:
-                    M = np.float32([[1, 0, 0], [0, -1, original_img.shape[0]]])
-                elif axis == t["axis_y"]:
-                    M = np.float32([[-1, 0, original_img.shape[1]], [0, 1, 0]])
-                else:  # diagonal
-                    M = np.float32([[0, 1, 0], [1, 0, 0]])
-                
-                if st.button(t["btn_apply"], key="apply_refl"):
-                    result_img = apply_affine_transform(original_img, M)
-                    st.session_state.last_result = result_img
-        
-        with col_right:
-            # Display results
-            if "last_result" in st.session_state:
-                st.image(st.session_state.last_result, 
-                        caption=t[f"{current_transform}_result"], 
-                        use_column_width=True)
-                
-                # Download button
-                img_bytes = image_to_bytes(st.session_state.last_result)
-                st.download_button(
-                    label="📥 Download Result",
-                    data=img_bytes,
-                    file_name=f"{current_transform}_result.png",
-                    mime="image/png"
-                )
-            else:
-                st.info("Apply transformation to see results here")
+                    M = np.float32([[scale_x, 0, 0], [0, scale_y, 0]])
+                    
+                    if st.button(t["btn_apply"], key="apply_scale"):
+                        result_img = apply_affine_transform(original_img, M, (new_w, new_h))
+                        st.session_state.last_result = result_img
+                        
+                elif current_transform == "rotation":
+                    st.markdown(t["rot_settings"])
+                    angle = st.slider(t["rot_angle"], -180, 180, 0, 5)
+                    
+                    h, w = original_img.shape[:2]
+                    center = (w // 2, h // 2)
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    
+                    if st.button(t["btn_apply"], key="apply_rot"):
+                        result_img = apply_affine_transform(original_img, M)
+                        st.session_state.last_result = result_img
+                        
+                elif current_transform == "shearing":
+                    st.markdown(t["shear_settings"])
+                    shear_x = st.slider(t["shear_x"], -1.0, 1.0, 0.0, 0.1)
+                    shear_y = st.slider(t["shear_y"], -1.0, 1.0, 0.0, 0.1)
+                    
+                    M = np.float32([[1, shear_x, 0], [shear_y, 1, 0]])
+                    
+                    if st.button(t["btn_apply"], key="apply_shear"):
+                        result_img = apply_affine_transform(original_img, M)
+                        st.session_state.last_result = result_img
+                        
+                elif current_transform == "reflection":
+                    st.markdown(t["refl_settings"])
+                    axis = st.radio(t["refl_axis"], 
+                                  [t["axis_x"], t["axis_y"], t["axis_diag"]],
+                                  horizontal=True)
+                    
+                    if axis == t["axis_x"]:
+                        M = np.float32([[1, 0, 0], [0, -1, original_img.shape[0]]])
+                    elif axis == t["axis_y"]:
+                        M = np.float32([[-1, 0, original_img.shape[1]], [0, 1, 0]])
+                    else:  # diagonal
+                        M = np.float32([[0, 1, 0], [1, 0, 0]])
+                    
+                    if st.button(t["btn_apply"], key="apply_refl"):
+                        result_img = apply_affine_transform(original_img, M)
+                        st.session_state.last_result = result_img
+            
+            with col_right:
+                # Display results
+                if st.session_state.last_result is not None:
+                    st.image(st.session_state.last_result, 
+                            caption=t[f"{current_transform}_result"], 
+                            use_column_width=True)
+                    
+                    # Download button
+                    img_bytes = image_to_bytes(st.session_state.last_result)
+                    st.download_button(
+                        label="📥 Download Result",
+                        data=img_bytes,
+                        file_name=f"{current_transform}_result.png",
+                        mime="image/png"
+                    )
+                else:
+                    st.info("Apply transformation to see results here")
 
 # ===================== 11. TAB 3: FILTER & CONVOLUTION =====================
 with tab_filter:
@@ -738,152 +740,155 @@ with tab_filter:
         
         if st.session_state.original_img is None:
             st.warning(t["filter_info"])
-            st.stop()
-        
-        original_img = st.session_state.original_img
-        
-        # Filter selection buttons
-        col_filters = st.columns([2, 2, 2, 2, 2, 2])
-        filter_buttons = [
-            t["btn_blur"], t["btn_sharpen"], t["btn_background"],
-            t["btn_grayscale"], t["btn_edge"], t["btn_brightness"]
-        ]
-        
-        for idx, (col, btn_text) in enumerate(zip(col_filters, filter_buttons)):
-            with col:
-                if st.button(btn_text, key=f"filter_btn_{idx}", use_container_width=True):
-                    st.session_state["image_filter"] = btn_text.lower()
-        
-        # Default filter
-        if st.session_state["image_filter"] is None:
-            st.session_state["image_filter"] = "blur"
-        
-        current_filter = st.session_state["image_filter"]
-        
-        col_filter_left, col_filter_right = st.columns(2)
-        
-        with col_filter_left:
-            # Filter controls
-            if "blur" in current_filter:
-                st.markdown(t["blur_settings"])
-                kernel_size = st.slider(t["blur_kernel"], 3, 31, 5, 2)
-                
-                if st.button(t["btn_apply"], key="apply_blur"):
-                    img_bgr = to_opencv(original_img)
-                    blurred = cv2.GaussianBlur(img_bgr, (kernel_size, kernel_size), 0)
-                    result_img = to_streamlit(blurred)
-                    st.session_state.filter_result = result_img
+        else:
+            original_img = st.session_state.original_img
+            
+            # Filter selection buttons - FIXED: using dictionary keys for mapping
+            col_filters = st.columns([2, 2, 2, 2, 2, 2])
+            filter_mapping = {
+                t["btn_blur"]: "blur",
+                t["btn_sharpen"]: "sharpen", 
+                t["btn_background"]: "background",
+                t["btn_grayscale"]: "grayscale",
+                t["btn_edge"]: "edge",
+                t["btn_brightness"]: "brightness"
+            }
+            
+            filter_buttons = list(filter_mapping.keys())
+            
+            for idx, (col, btn_text) in enumerate(zip(col_filters, filter_buttons)):
+                with col:
+                    if st.button(btn_text, key=f"filter_btn_{idx}", use_container_width=True):
+                        st.session_state["image_filter"] = filter_mapping[btn_text]
+            
+            current_filter = st.session_state["image_filter"]
+            
+            col_filter_left, col_filter_right = st.columns(2)
+            
+            with col_filter_left:
+                # Filter controls
+                if current_filter == "blur":
+                    st.markdown(t["blur_settings"])
+                    kernel_size = st.slider(t["blur_kernel"], 3, 31, 5, 2)
                     
-            elif "sharpen" in current_filter:
-                st.markdown(t["sharpen_settings"])
-                st.markdown(t["sharpen_desc"])
-                
-                # Sharpen kernel
-                sharpen_kernel = np.array([
-                    [0, -1, 0],
-                    [-1, 5, -1],
-                    [0, -1, 0]
-                ])
-                
-                intensity = st.slider("Intensity", 1.0, 5.0, 2.0, 0.1)
-                custom_kernel = np.array([
-                    [0, -1, 0],
-                    [-1, intensity, -1],
-                    [0, -1, 0]
-                ])
-                
-                if st.button(t["btn_apply"], key="apply_sharpen"):
-                    img_bgr = to_opencv(original_img)
-                    sharpened = cv2.filter2D(img_bgr, -1, custom_kernel)
-                    result_img = to_streamlit(sharpened)
-                    st.session_state.filter_result = result_img
-                    
-            elif "background" in current_filter:
-                st.markdown(t["bg_settings"])
-                method = st.selectbox(t["bg_method"], 
-                                    ["Simple Ellipse Mask", "HSV Color Range"])
-                
-                if st.button(t["btn_apply"], key="apply_bg"):
-                    if method == "Simple Ellipse Mask":
-                        mask = segment_foreground(original_img)
-                        result_img = cv2.bitwise_and(original_img, original_img, mask=mask)
-                    else:
-                        result_img = simple_background_removal_hsv(original_img)
-                    st.session_state.filter_result = result_img
-                    
-            elif "grayscale" in current_filter:
-                st.markdown(t["gray_settings"])
-                st.markdown(t["gray_desc"])
-                
-                method = st.radio("Conversion Method", 
-                                ["Average", "Weighted (Luminosity)", "OpenCV"])
-                
-                if st.button(t["btn_apply"], key="apply_gray"):
-                    if method == "Average":
-                        gray = np.mean(original_img, axis=2).astype(np.uint8)
-                        result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-                    elif method == "Weighted (Luminosity)":
-                        # ITU-R BT.601 standard
-                        gray = np.dot(original_img[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-                        result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-                    else:
+                    if st.button(t["btn_apply"], key="apply_blur"):
                         img_bgr = to_opencv(original_img)
-                        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-                        result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-                    st.session_state.filter_result = result_img
+                        blurred = cv2.GaussianBlur(img_bgr, (kernel_size, kernel_size), 0)
+                        result_img = to_streamlit(blurred)
+                        st.session_state.filter_result = result_img
+                        
+                elif current_filter == "sharpen":
+                    st.markdown(t["sharpen_settings"])
+                    st.markdown(t["sharpen_desc"])
                     
-            elif "edge" in current_filter:
-                st.markdown(t["edge_settings"])
-                edge_method = st.selectbox(t["edge_method"], 
-                                         ["Sobel", "Canny", "Laplacian"])
-                
-                if edge_method == "Canny":
-                    threshold1 = st.slider("Threshold 1", 0, 255, 100)
-                    threshold2 = st.slider("Threshold 2", 0, 255, 200)
-                
-                if st.button(t["btn_apply"], key="apply_edge"):
-                    gray = rgb_to_gray(original_img)
+                    intensity = st.slider("Intensity", 1.0, 5.0, 2.0, 0.1)
+                    custom_kernel = np.array([
+                        [0, -1, 0],
+                        [-1, intensity, -1],
+                        [0, -1, 0]
+                    ])
                     
-                    if edge_method == "Sobel":
-                        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
-                        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
-                        edges = cv2.magnitude(sobelx, sobely)
-                        edges = np.uint8(np.absolute(edges))
-                    elif edge_method == "Canny":
-                        edges = cv2.Canny(gray, threshold1, threshold2)
-                    else:  # Laplacian
-                        edges = cv2.Laplacian(gray, cv2.CV_64F)
-                        edges = np.uint8(np.absolute(edges))
+                    if st.button(t["btn_apply"], key="apply_sharpen"):
+                        img_bgr = to_opencv(original_img)
+                        sharpened = cv2.filter2D(img_bgr, -1, custom_kernel)
+                        result_img = to_streamlit(sharpened)
+                        st.session_state.filter_result = result_img
+                        
+                elif current_filter == "background":
+                    st.markdown(t["bg_settings"])
+                    method = st.selectbox(t["bg_method"], 
+                                        ["Simple Ellipse Mask", "HSV Color Range"])
                     
-                    result_img = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
-                    st.session_state.filter_result = result_img
+                    if st.button(t["btn_apply"], key="apply_bg"):
+                        if method == "Simple Ellipse Mask":
+                            mask = segment_foreground(original_img)
+                            result_img = cv2.bitwise_and(original_img, original_img, mask=mask)
+                        else:
+                            result_img = simple_background_removal_hsv(original_img)
+                        st.session_state.filter_result = result_img
+                        
+                elif current_filter == "grayscale":
+                    st.markdown(t["gray_settings"])
+                    st.markdown(t["gray_desc"])
                     
-            elif "brightness" in current_filter:
-                st.markdown(t["bright_settings"])
-                brightness = st.slider(t["bright_brightness"], -100, 100, 0)
-                contrast = st.slider(t["bright_contrast"], -50, 50, 0)
-                
-                if st.button(t["btn_apply"], key="apply_bright"):
-                    result_img = adjust_brightness_contrast(original_img, brightness, contrast)
-                    st.session_state.filter_result = result_img
-        
-        with col_filter_right:
-            # Display filter results
-            if "filter_result" in st.session_state:
-                st.image(st.session_state.filter_result, 
-                        caption=t[f"{current_filter}_result"], 
-                        use_column_width=True)
-                
-                # Download button
-                img_bytes = image_to_bytes(st.session_state.filter_result)
-                st.download_button(
-                    label="📥 Download Result",
-                    data=img_bytes,
-                    file_name=f"{current_filter}_result.png",
-                    mime="image/png"
-                )
-            else:
-                st.info("Apply filter to see results here")
+                    method = st.radio("Conversion Method", 
+                                    ["Average", "Weighted (Luminosity)", "OpenCV"])
+                    
+                    if st.button(t["btn_apply"], key="apply_gray"):
+                        if method == "Average":
+                            gray = np.mean(original_img, axis=2).astype(np.uint8)
+                            result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+                        elif method == "Weighted (Luminosity)":
+                            # ITU-R BT.601 standard
+                            gray = np.dot(original_img[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+                            result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+                        else:
+                            img_bgr = to_opencv(original_img)
+                            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+                            result_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+                        st.session_state.filter_result = result_img
+                        
+                elif current_filter == "edge":
+                    st.markdown(t["edge_settings"])
+                    edge_method = st.selectbox(t["edge_method"], 
+                                             ["Sobel", "Canny", "Laplacian"])
+                    
+                    if edge_method == "Canny":
+                        threshold1 = st.slider("Threshold 1", 0, 255, 100)
+                        threshold2 = st.slider("Threshold 2", 0, 255, 200)
+                    
+                    if st.button(t["btn_apply"], key="apply_edge"):
+                        gray = rgb_to_gray(original_img)
+                        
+                        if edge_method == "Sobel":
+                            sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+                            sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
+                            edges = cv2.magnitude(sobelx, sobely)
+                            edges = np.uint8(np.absolute(edges))
+                        elif edge_method == "Canny":
+                            edges = cv2.Canny(gray, threshold1, threshold2)
+                        else:  # Laplacian
+                            edges = cv2.Laplacian(gray, cv2.CV_64F)
+                            edges = np.uint8(np.absolute(edges))
+                        
+                        result_img = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
+                        st.session_state.filter_result = result_img
+                        
+                elif current_filter == "brightness":
+                    st.markdown(t["bright_settings"])
+                    brightness = st.slider(t["bright_brightness"], -100, 100, 0)
+                    contrast = st.slider(t["bright_contrast"], -50, 50, 0)
+                    
+                    if st.button(t["btn_apply"], key="apply_bright"):
+                        result_img = adjust_brightness_contrast(original_img, brightness, contrast)
+                        st.session_state.filter_result = result_img
+            
+            with col_filter_right:
+                # Display filter results
+                if st.session_state.filter_result is not None:
+                    # Check if image has alpha channel (RGBA)
+                    if st.session_state.filter_result.shape[2] == 4:
+                        st.image(st.session_state.filter_result, 
+                                caption=t["bg_result"], 
+                                use_column_width=True)
+                    else:
+                        st.image(st.session_state.filter_result, 
+                                caption=t[f"{current_filter}_result"], 
+                                use_column_width=True)
+                    
+                    # Download button
+                    try:
+                        img_bytes = image_to_bytes(st.session_state.filter_result)
+                        st.download_button(
+                            label="📥 Download Result",
+                            data=img_bytes,
+                            file_name=f"{current_filter}_result.png",
+                            mime="image/png"
+                        )
+                    except:
+                        st.warning("Cannot download this image type")
+                else:
+                    st.info("Apply filter to see results here")
 
 # ===================== 12. TAB 4: TEAM INFORMATION =====================
 with tab_team:
@@ -891,31 +896,31 @@ with tab_team:
         st.markdown(f"### {t['team_title']}")
         st.markdown(t["team_subtitle"])
         
-        # Team members data
+        # Team members data - menggunakan nama Indonesia
         team_members = [
             {
-                "name": "John Doe",
+                "name": "Ahmad Fauzi",
                 "sid": "1234567890",
                 "role": "Frontend Developer",
                 "photo": "assets/team/john.jpg",  # Pastikan file ini ada
                 "contribution": "UI/UX Design, Frontend Development"
             },
             {
-                "name": "Jane Smith",
+                "name": "Siti Nurhaliza",
                 "sid": "0987654321",
                 "role": "Backend Developer",
                 "photo": "assets/team/jane.jpg",
                 "contribution": "Algorithm Implementation, Data Processing"
             },
             {
-                "name": "Alex Johnson",
+                "name": "Budi Santoso",
                 "sid": "1122334455",
                 "role": "Data Scientist",
                 "photo": "assets/team/alex.jpg",
                 "contribution": "Image Processing Algorithms, Documentation"
             },
             {
-                "name": "Maria Garcia",
+                "name": "Maya Indah",
                 "sid": "5566778899",
                 "role": "Project Manager",
                 "photo": "assets/team/maria.jpg",
@@ -937,7 +942,7 @@ with tab_team:
                         <h4 style='margin-bottom: 5px;'>{member['name']}</h4>
                         <p style='margin: 2px; font-size: 12px;'><strong>{t['team_sid']}</strong> {member['sid']}</p>
                         <p style='margin: 2px; font-size: 12px;'><strong>{t['team_role']}</strong> {member['role']}</p>
-                        <p style='margin: 2px; font-size: 11px; color: #666;'><strong>{t['team_Contribution']}</strong> {member['contribution']}</p>
+                        <p style='margin: 2px; font-size: 11px; color: #666;'><strong>{t['team_contribution']}</strong> {member['contribution']}</p>
                     </div>
                     """, unsafe_allow_html=True)
         
