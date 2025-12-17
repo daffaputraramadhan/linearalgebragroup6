@@ -905,7 +905,7 @@ with tab_team:
         st.markdown(f"### {t['team_title']}")
         st.markdown(t["team_subtitle"])
         
-        # Team members data
+        # Team members data - DIPERBAIKI: String photo Sahat Fernando
         team_members = [
             {
                 "name": "Daffa Putra Ramadhan",
@@ -932,7 +932,7 @@ with tab_team:
                 "name": "Sahat Fernando",
                 "sid": "004202400121",
                 "role": "Member",
-                "photo": "images/nando.jpg
+                "photo": "images/nando.jpg",  # <-- PERBAIKAN: TAMBAHKAN TANDA KUTIP DI SINI
                 "contribution": "Testing"
             }
         ]
