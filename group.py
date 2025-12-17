@@ -9,13 +9,12 @@ import base64
 
 # ===================== 1. CONFIG (HANYA BOLEH SEKALI DI AWAL) =====================
 st.set_page_config(
-    page_title="Explanation",
+    page_title="Matrix Transformation & Image Processing",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ===================== 2. TRANSLATIONS DATA (SANGAT PENTING) =====================
-# Ini adalah bagian yang sebelumnya hilang dan menyebabkan error.
+# ===================== 2. TRANSLATIONS DATA =====================
 translations = {
     "id": {
         "title": "Matrix Transformation & Image Processing",
@@ -204,18 +203,13 @@ translations = {
 }
 
 # ===================== 3. HELPER FUNCTIONS =====================
-
 def set_video_background(video_path: str):
-    """Set an mp4 video as full-screen background using HTML/CSS."""
     if not os.path.exists(video_path):
-        # Silent fail or use a color if video missing to prevent crash
         return
-
     with open(video_path, "rb") as f:
         data = f.read()
     b64 = base64.b64encode(data).decode("utf-8")
     video_data_url = f"data:video/mp4;base64,{b64}"
-
     st.markdown(
         f"""
         <style>
@@ -229,7 +223,7 @@ def set_video_background(video_path: str):
             height: auto;
             z-index: -1;
             object-fit: cover;
-            opacity: 0.8; /* Sedikit transparan agar tulisan terbaca */
+            opacity: 0.8;
         }}
         .stApp {{
             background: transparent !important;
@@ -258,12 +252,10 @@ def apply_affine_transform(img_rgb, M, output_size=None):
     h, w = img_bgr.shape[:2]
     if output_size is None:
         output_size = (w, h)
-
     if M.shape == (3, 3):
         M_affine = M[0:2, :]
     else:
         M_affine = M
-
     transformed = cv2.warpAffine(
         img_bgr, M_affine, output_size,
         flags=cv2.INTER_LINEAR,
@@ -272,8 +264,6 @@ def apply_affine_transform(img_rgb, M, output_size=None):
     return to_streamlit(transformed)
 
 def manual_convolution_gray(img_gray, kernel):
-    # Optimasi sederhana menggunakan filter2D OpenCV untuk performa
-    # Jika ingin full manual loop (lambat di Python), bisa dikembalikan
     return cv2.filter2D(img_gray, -1, kernel)
 
 def rgb_to_gray(img_rgb):
@@ -289,14 +279,12 @@ def adjust_brightness_contrast(img_rgb, brightness=0, contrast=0):
     return to_streamlit(adjusted)
 
 def image_to_bytes(img_rgb, fmt="PNG"):
-    """Convert numpy RGB image to bytes for download."""
     pil_img = Image.fromarray(img_rgb.astype("uint8"))
     buf = BytesIO()
     pil_img.save(buf, format=fmt)
     return buf.getvalue()
 
 def safe_display_square_image(path):
-    """Display image in square format with proper cropping"""
     if os.path.exists(path):
         try:
             img = Image.open(path)
@@ -310,11 +298,9 @@ def safe_display_square_image(path):
             bottom = top + min_dim
             img_cropped = img.crop((left, top, right, bottom))
             img_resized = img_cropped.resize((140, 140), Image.Resampling.LANCZOS)
-
             buffered = BytesIO()
             img_resized.save(buffered, format="JPEG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
-
             st.markdown(f"""
             <div class="crystal-shape">
                 <img src="data:image/jpeg;base64,{img_str}" alt="Team member"/>
@@ -331,9 +317,7 @@ def safe_display_square_image(path):
         </div>
         """, unsafe_allow_html=True)
 
-# --- Background Removal Helpers (Simplified for Stability) ---
 def segment_foreground(image: np.ndarray) -> np.ndarray:
-    """Simple center ellipse mask for demo purposes"""
     h, w = image.shape[:2]
     mask = np.zeros((h, w), dtype=np.uint8)
     center = (w // 2, h // 2)
@@ -344,35 +328,25 @@ def segment_foreground(image: np.ndarray) -> np.ndarray:
 def simple_background_removal_hsv(img_rgb):
     img_bgr = to_opencv(img_rgb)
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-    # Deteksi warna hijau/biru (chroma key sederhana)
-    lower = np.array([35, 40, 40]) # Range hijau kira-kira
+    lower = np.array([35, 40, 40])
     upper = np.array([85, 255, 255])
     mask_bg = cv2.inRange(hsv, lower, upper)
     mask_fg = cv2.bitwise_not(mask_bg)
     fg = cv2.bitwise_and(img_bgr, img_bgr, mask=mask_fg)
-    
-    # Buat alpha channel
     b, g, r = cv2.split(fg)
     rgba = [b, g, r, mask_fg]
     dst = cv2.merge(rgba, 4)
-    
     return cv2.cvtColor(dst, cv2.COLOR_BGRA2RGBA)
 
 def remove_background_advanced(image, mode="auto", output_mode="transparent", **kwargs):
-    # Menggunakan dummy mask karena implementasi ML/AI berat untuk script ini
     raw_mask = segment_foreground(image)
-    
-    # Smooth mask
     raw_mask = cv2.GaussianBlur(raw_mask, (21, 21), 0)
-    
     if output_mode == "transparent":
         rgba = np.dstack([image, raw_mask])
         return rgba
-    
     return image
 
 # ===================== 4. SESSION STATE INIT =====================
-
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "light"
 if "language" not in st.session_state:
@@ -385,8 +359,6 @@ if "image_filter" not in st.session_state:
     st.session_state["image_filter"] = None
 
 # ===================== 5. UI SETUP & CSS =====================
-
-# Panggil fungsi background video (pastikan file ada, kalau tidak, tidak error)
 set_video_background("assets/background.mp4")
 
 base_css = """
@@ -403,7 +375,6 @@ section[data-testid="stExpander"]{
 div[data-testid="column"] button {
     width: 100%;
 }
-/* Simple rectangular container for photos and text */
 .crystal-shape {
     width: 140px;
     height: 140px;
@@ -468,16 +439,15 @@ else:
     st.markdown(dark_css, unsafe_allow_html=True)
 
 # ===================== 6. HEADER & NAV =====================
-
 lang = st.session_state["language"]
-t = translations[lang] # Load dictionary bahasa
+t = translations[lang]
 theme_mode = st.session_state["theme_mode"]
 
-with st.container(border=True):
-    header_col1, header_col2, header_col3 = st.columns([4, 1, 1], vertical_alignment="center")
+with st.container():
+    header_col1, header_col2, header_col3 = st.columns([6, 2, 2], vertical_alignment="center")
 
     with header_col1:
-        st.title(t["title"])
+        st.title(t["title"], anchor=None)
 
     with header_col2:
         lang_button_text = "🇬🇧 EN" if lang == "id" else "🇮🇩 ID"
@@ -494,8 +464,7 @@ with st.container(border=True):
 st.subheader(t["subtitle"])
 
 # ===================== 7. MAIN CONTENT =====================
-
-with st.container(border=True):
+with st.container():
     st.markdown(t["app_goal"])
     st.markdown(t["features"])
 
@@ -503,7 +472,7 @@ with st.container(border=True):
 col1, col2, col3 = st.columns(3, vertical_alignment="top")
 
 with col1:
-    with st.container(border=True):
+    with st.container():
         st.markdown(f"""
         <div class="crystal-text">
             <strong>{t['concept_1_title']}</strong><br>
@@ -513,7 +482,7 @@ with col1:
         """, unsafe_allow_html=True)
 
 with col2:
-    with st.container(border=True):
+    with st.container():
         st.markdown(f"""
         <div class="crystal-text">
             <strong>{t['concept_2_title']}</strong><br>
@@ -523,7 +492,7 @@ with col2:
         """, unsafe_allow_html=True)
 
 with col3:
-    with st.container(border=True):
+    with st.container():
         st.markdown(f"""
         <div class="crystal-text">
             <strong>{t['concept_3_title']}</strong><br>
@@ -533,15 +502,10 @@ with col3:
         """, unsafe_allow_html=True)
 
 # --- Concepts Reminder ---
-with st.container(border=True):
+with st.container():
     st.markdown(f"""
     <div class="crystal-text">
         <strong>{t['quick_concepts']}</strong><br>
         {t['quick_concepts_text']}
     </div>
     """, unsafe_allow_html=True)
-
-
-
-
-
